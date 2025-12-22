@@ -1,0 +1,421 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tech Contract Reviewer | Tollen Framework</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/tailwindcss/2.2.19/tailwind.min.css" rel="stylesheet">
+    <style>
+        .risk-high { background-color: #fee2e2; border-left: 4px solid #dc2626; }
+        .risk-medium { background-color: #fef3c7; border-left: 4px solid #f59e0b; }
+        .risk-low { background-color: #d1fae5; border-left: 4px solid #10b981; }
+        .loading { animation: pulse 2s infinite; }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        .priority-badge {
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 12px;
+        }
+        .drag-active { border-color: #3b82f6; background-color: #eff6ff; }
+    </style>
+</head>
+<body class="bg-gray-50 min-h-screen">
+    <nav class="bg-indigo-700 text-white py-4 shadow-lg">
+        <div class="container mx-auto px-4">
+            <h1 class="text-2xl font-bold">Tech Contract Reviewer</h1>
+            <p class="text-indigo-200 text-sm">Based on David Tollen's Technology Contracts Framework</p>
+        </div>
+    </nav>
+
+    <main class="container mx-auto px-4 py-8 max-w-5xl">
+        <!-- Upload Form -->
+        <div id="upload-section" class="bg-white rounded-lg shadow-md p-6 mb-8">
+            <h2 class="text-xl font-semibold mb-4 text-gray-800">Upload Contract for Review</h2>
+            
+            <form id="upload-form" class="space-y-6">
+                <!-- File Upload -->
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Contract Document</label>
+                    <div id="drop-zone" class="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center cursor-pointer hover:border-indigo-400 transition-colors">
+                        <input type="file" id="contract-file" accept=".doc,.docx" class="hidden">
+                        <svg class="mx-auto h-12 w-12 text-gray-400" stroke="currentColor" fill="none" viewBox="0 0 48 48">
+                            <path d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8m-12 4h.02" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+                        </svg>
+                        <p class="mt-2 text-sm text-gray-600">
+                            <span class="text-indigo-600 font-medium">Click to upload</span> or drag and drop
+                        </p>
+                        <p class="text-xs text-gray-500">.doc or .docx files up to 16MB</p>
+                        <p id="file-name" class="mt-2 text-sm text-indigo-600 font-medium hidden"></p>
+                    </div>
+                </div>
+
+                <!-- Party Selection -->
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Who do you represent?</label>
+                    <div class="grid grid-cols-2 gap-4">
+                        <label class="flex items-center p-4 border rounded-lg cursor-pointer hover:bg-gray-50 transition-colors">
+                            <input type="radio" name="party_type" value="customer" checked class="h-4 w-4 text-indigo-600">
+                            <div class="ml-3">
+                                <span class="block font-medium text-gray-900">Customer / Licensee</span>
+                                <span class="block text-sm text-gray-500">Buying software or services</span>
+                            </div>
+                        </label>
+                        <label class="flex items-center p-4 border rounded-lg cursor-pointer hover:bg-gray-50 transition-colors">
+                            <input type="radio" name="party_type" value="vendor" class="h-4 w-4 text-indigo-600">
+                            <div class="ml-3">
+                                <span class="block font-medium text-gray-900">Vendor / Provider</span>
+                                <span class="block text-sm text-gray-500">Selling software or services</span>
+                            </div>
+                        </label>
+                    </div>
+                </div>
+
+                <!-- Comment Level -->
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Review Aggressiveness</label>
+                    <div class="grid grid-cols-3 gap-4">
+                        <label class="flex flex-col items-center p-4 border rounded-lg cursor-pointer hover:bg-gray-50 transition-colors">
+                            <input type="radio" name="comment_level" value="friendly" class="h-4 w-4 text-green-600">
+                            <span class="mt-2 font-medium text-gray-900">Friendly</span>
+                            <span class="text-xs text-gray-500 text-center mt-1">Flag major risks only</span>
+                        </label>
+                        <label class="flex flex-col items-center p-4 border rounded-lg cursor-pointer hover:bg-gray-50 transition-colors border-indigo-200 bg-indigo-50">
+                            <input type="radio" name="comment_level" value="moderate" checked class="h-4 w-4 text-yellow-600">
+                            <span class="mt-2 font-medium text-gray-900">Moderate</span>
+                            <span class="text-xs text-gray-500 text-center mt-1">Balanced negotiation</span>
+                        </label>
+                        <label class="flex flex-col items-center p-4 border rounded-lg cursor-pointer hover:bg-gray-50 transition-colors">
+                            <input type="radio" name="comment_level" value="aggressive" class="h-4 w-4 text-red-600">
+                            <span class="mt-2 font-medium text-gray-900">Aggressive</span>
+                            <span class="text-xs text-gray-500 text-center mt-1">Maximum protection</span>
+                        </label>
+                    </div>
+                </div>
+
+                <button type="submit" id="submit-btn" class="w-full bg-indigo-600 text-white py-3 px-4 rounded-lg font-medium hover:bg-indigo-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+                    Analyze Contract
+                </button>
+            </form>
+        </div>
+
+        <!-- Loading State -->
+        <div id="loading-section" class="hidden bg-white rounded-lg shadow-md p-8 text-center">
+            <div class="loading">
+                <svg class="mx-auto h-16 w-16 text-indigo-600" fill="none" viewBox="0 0 24 24">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+            </div>
+            <p class="mt-4 text-lg text-gray-600">Analyzing your contract...</p>
+            <p class="text-sm text-gray-400">This may take 30-60 seconds</p>
+        </div>
+
+        <!-- Results Section -->
+        <div id="results-section" class="hidden space-y-6">
+            <!-- Summary Card -->
+            <div id="summary-card" class="bg-white rounded-lg shadow-md p-6">
+                <div class="flex items-center justify-between mb-4">
+                    <h2 class="text-xl font-semibold text-gray-800">Analysis Summary</h2>
+                    <span id="overall-risk" class="px-3 py-1 rounded-full text-sm font-medium"></span>
+                </div>
+                <p id="summary-text" class="text-gray-600 mb-4"></p>
+                <div class="flex items-center gap-4 text-sm text-gray-500">
+                    <span>Representing: <strong id="party-display"></strong></span>
+                    <span>Review Level: <strong id="level-display"></strong></span>
+                </div>
+            </div>
+
+            <!-- Download Button -->
+            <div class="bg-white rounded-lg shadow-md p-4 flex items-center justify-between">
+                <div>
+                    <p class="font-medium text-gray-800">Annotated Document</p>
+                    <p class="text-sm text-gray-500">Download the contract with review comments</p>
+                </div>
+                <a href="/download" id="download-btn" class="bg-green-600 text-white py-2 px-4 rounded-lg font-medium hover:bg-green-700 transition-colors">
+                    Download .docx
+                </a>
+            </div>
+
+            <!-- Issues List -->
+            <div class="bg-white rounded-lg shadow-md p-6">
+                <h2 class="text-xl font-semibold text-gray-800 mb-4">Issues Found</h2>
+                <div id="issues-list" class="space-y-4"></div>
+            </div>
+
+            <!-- Missing Clauses -->
+            <div id="missing-section" class="bg-white rounded-lg shadow-md p-6">
+                <h2 class="text-xl font-semibold text-gray-800 mb-4">Missing Clauses</h2>
+                <div id="missing-list" class="space-y-4"></div>
+            </div>
+
+            <!-- Positive Aspects -->
+            <div id="positive-section" class="bg-white rounded-lg shadow-md p-6">
+                <h2 class="text-xl font-semibold text-gray-800 mb-4">Positive Aspects</h2>
+                <ul id="positive-list" class="list-disc list-inside text-gray-600 space-y-2"></ul>
+            </div>
+
+            <!-- New Analysis Button -->
+            <button id="new-analysis-btn" class="w-full bg-gray-100 text-gray-700 py-3 px-4 rounded-lg font-medium hover:bg-gray-200 transition-colors">
+                Analyze Another Contract
+            </button>
+        </div>
+
+        <!-- Error Display -->
+        <div id="error-section" class="hidden bg-red-50 border border-red-200 rounded-lg p-6">
+            <h3 class="text-red-800 font-medium">Analysis Error</h3>
+            <p id="error-message" class="text-red-600 mt-2"></p>
+            <button id="retry-btn" class="mt-4 bg-red-600 text-white py-2 px-4 rounded-lg font-medium hover:bg-red-700">
+                Try Again
+            </button>
+        </div>
+    </main>
+
+    <footer class="bg-gray-800 text-gray-400 py-6 mt-12">
+        <div class="container mx-auto px-4 text-center text-sm">
+            <p>Based on David Tollen's "The Tech Contracts Handbook" framework</p>
+            <p class="mt-1">This tool provides guidance only and does not constitute legal advice.</p>
+        </div>
+    </footer>
+
+    <script>
+        const dropZone = document.getElementById('drop-zone');
+        const fileInput = document.getElementById('contract-file');
+        const fileName = document.getElementById('file-name');
+        const uploadForm = document.getElementById('upload-form');
+        const submitBtn = document.getElementById('submit-btn');
+        
+        const uploadSection = document.getElementById('upload-section');
+        const loadingSection = document.getElementById('loading-section');
+        const resultsSection = document.getElementById('results-section');
+        const errorSection = document.getElementById('error-section');
+
+        // Drag and drop handling
+        dropZone.addEventListener('click', () => fileInput.click());
+        
+        dropZone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            dropZone.classList.add('drag-active');
+        });
+        
+        dropZone.addEventListener('dragleave', () => {
+            dropZone.classList.remove('drag-active');
+        });
+        
+        dropZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dropZone.classList.remove('drag-active');
+            if (e.dataTransfer.files.length) {
+                fileInput.files = e.dataTransfer.files;
+                showFileName(e.dataTransfer.files[0].name);
+            }
+        });
+        
+        fileInput.addEventListener('change', (e) => {
+            if (e.target.files.length) {
+                showFileName(e.target.files[0].name);
+            }
+        });
+        
+        function showFileName(name) {
+            fileName.textContent = name;
+            fileName.classList.remove('hidden');
+        }
+
+        // Form submission
+        uploadForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const file = fileInput.files[0];
+            if (!file) {
+                alert('Please select a contract file');
+                return;
+            }
+            
+            const formData = new FormData();
+            formData.append('contract', file);
+            formData.append('party_type', document.querySelector('input[name="party_type"]:checked').value);
+            formData.append('comment_level', document.querySelector('input[name="comment_level"]:checked').value);
+            
+            // Show loading
+            uploadSection.classList.add('hidden');
+            loadingSection.classList.remove('hidden');
+            errorSection.classList.add('hidden');
+            
+            try {
+                const response = await fetch('/analyze', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                const data = await response.json();
+                
+                if (data.error) {
+                    showError(data.error);
+                    return;
+                }
+                
+                displayResults(data);
+                
+            } catch (err) {
+                showError('Network error: ' + err.message);
+            }
+        });
+        
+        function showError(message) {
+            loadingSection.classList.add('hidden');
+            uploadSection.classList.remove('hidden');
+            errorSection.classList.remove('hidden');
+            document.getElementById('error-message').textContent = message;
+        }
+        
+        function displayResults(data) {
+            loadingSection.classList.add('hidden');
+            resultsSection.classList.remove('hidden');
+            
+            // Summary
+            document.getElementById('summary-text').textContent = data.summary || 'Analysis complete.';
+            
+            const riskBadge = document.getElementById('overall-risk');
+            riskBadge.textContent = data.overall_risk || 'REVIEWED';
+            riskBadge.className = 'px-3 py-1 rounded-full text-sm font-medium ' + getRiskClass(data.overall_risk);
+            
+            document.getElementById('party-display').textContent = 
+                data.party_type === 'vendor' ? 'Vendor/Provider' : 'Customer/Licensee';
+            document.getElementById('level-display').textContent = 
+                data.comment_level.charAt(0).toUpperCase() + data.comment_level.slice(1);
+            
+            // Issues
+            const issuesList = document.getElementById('issues-list');
+            issuesList.innerHTML = '';
+            
+            if (data.issues && data.issues.length > 0) {
+                // Sort by priority
+                data.issues.sort((a, b) => (a.priority || 99) - (b.priority || 99));
+                
+                data.issues.forEach(issue => {
+                    issuesList.innerHTML += createIssueCard(issue);
+                });
+            } else {
+                issuesList.innerHTML = '<p class="text-gray-500 italic">No issues found.</p>';
+            }
+            
+            // Missing clauses
+            const missingList = document.getElementById('missing-list');
+            const missingSection = document.getElementById('missing-section');
+            missingList.innerHTML = '';
+            
+            if (data.missing_clauses && data.missing_clauses.length > 0) {
+                missingSection.classList.remove('hidden');
+                data.missing_clauses.forEach(missing => {
+                    missingList.innerHTML += createMissingCard(missing);
+                });
+            } else {
+                missingSection.classList.add('hidden');
+            }
+            
+            // Positive aspects
+            const positiveList = document.getElementById('positive-list');
+            const positiveSection = document.getElementById('positive-section');
+            positiveList.innerHTML = '';
+            
+            if (data.positive_aspects && data.positive_aspects.length > 0) {
+                positiveSection.classList.remove('hidden');
+                data.positive_aspects.forEach(item => {
+                    positiveList.innerHTML += `<li>${escapeHtml(item)}</li>`;
+                });
+            } else {
+                positiveSection.classList.add('hidden');
+            }
+            
+            // Download button
+            const downloadBtn = document.getElementById('download-btn');
+            if (data.annotated_available) {
+                downloadBtn.classList.remove('opacity-50', 'pointer-events-none');
+            } else {
+                downloadBtn.classList.add('opacity-50', 'pointer-events-none');
+            }
+        }
+        
+        function getRiskClass(risk) {
+            switch(risk) {
+                case 'HIGH': return 'bg-red-100 text-red-800';
+                case 'MEDIUM': return 'bg-yellow-100 text-yellow-800';
+                case 'LOW': return 'bg-green-100 text-green-800';
+                default: return 'bg-gray-100 text-gray-800';
+            }
+        }
+        
+        function createIssueCard(issue) {
+            const riskClass = issue.risk_level === 'HIGH' ? 'risk-high' : 
+                             issue.risk_level === 'MEDIUM' ? 'risk-medium' : 'risk-low';
+            
+            return `
+                <div class="p-4 rounded-lg ${riskClass}">
+                    <div class="flex items-center gap-2 mb-2">
+                        <span class="priority-badge bg-indigo-600 text-white">${issue.priority || '?'}</span>
+                        <span class="font-semibold text-gray-800">${escapeHtml(issue.clause_category || 'General')}</span>
+                        <span class="ml-auto text-sm font-medium ${getRiskTextClass(issue.risk_level)}">${issue.risk_level || 'REVIEW'}</span>
+                    </div>
+                    ${issue.quote ? `<blockquote class="border-l-2 border-gray-400 pl-3 my-2 text-sm text-gray-600 italic">"${escapeHtml(issue.quote)}"</blockquote>` : ''}
+                    <p class="text-gray-700 mb-2"><strong>Concern:</strong> ${escapeHtml(issue.concern || '')}</p>
+                    <p class="text-gray-700"><strong>Recommendation:</strong> ${escapeHtml(issue.recommendation || '')}</p>
+                    ${issue.tollen_principle ? `<p class="text-sm text-indigo-600 mt-2"><em>Tollen: ${escapeHtml(issue.tollen_principle)}</em></p>` : ''}
+                </div>
+            `;
+        }
+        
+        function createMissingCard(missing) {
+            return `
+                <div class="p-4 rounded-lg bg-blue-50 border-l-4 border-blue-500">
+                    <div class="flex items-center gap-2 mb-2">
+                        <span class="priority-badge bg-blue-600 text-white">${missing.priority || '?'}</span>
+                        <span class="font-semibold text-gray-800">${escapeHtml(missing.clause_category || 'Clause')}</span>
+                    </div>
+                    <p class="text-gray-700 mb-2"><strong>Why needed:</strong> ${escapeHtml(missing.importance || '')}</p>
+                    <details class="mt-2">
+                        <summary class="cursor-pointer text-blue-600 font-medium">View suggested language</summary>
+                        <pre class="mt-2 p-3 bg-white rounded text-sm overflow-x-auto whitespace-pre-wrap">${escapeHtml(missing.suggested_language || '')}</pre>
+                    </details>
+                </div>
+            `;
+        }
+        
+        function getRiskTextClass(risk) {
+            switch(risk) {
+                case 'HIGH': return 'text-red-700';
+                case 'MEDIUM': return 'text-yellow-700';
+                case 'LOW': return 'text-green-700';
+                default: return 'text-gray-700';
+            }
+        }
+        
+        function escapeHtml(text) {
+            if (!text) return '';
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+        
+        // New analysis button
+        document.getElementById('new-analysis-btn').addEventListener('click', () => {
+            resultsSection.classList.add('hidden');
+            uploadSection.classList.remove('hidden');
+            fileInput.value = '';
+            fileName.classList.add('hidden');
+        });
+        
+        // Retry button
+        document.getElementById('retry-btn').addEventListener('click', () => {
+            errorSection.classList.add('hidden');
+        });
+    </script>
+</body>
+</html>
