@@ -21,6 +21,7 @@ app.secret_key = os.environ.get('SECRET_KEY', 'dev-secret-key-change-in-producti
 # Configuration
 UPLOAD_FOLDER = tempfile.mkdtemp()
 ALLOWED_EXTENSIONS = {'doc', 'docx'}
+MAX_PROMPT_CHARS = 6000
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max
 
@@ -232,13 +233,13 @@ Respond in this exact JSON format:
 }}
 
 CONTRACT TEXT:
-{contract_text[:10000]}"""  # Limit to ~10k chars for API
+{contract_text[:MAX_PROMPT_CHARS]}"""  # Limit to ~6k chars for API
 
     try:
         client = get_anthropic_client()
         message = client.messages.create(
             model="claude-sonnet-4-20250514",
-            max_tokens=2000,
+            max_tokens=1200,
             messages=[{"role": "user", "content": prompt}]
         )
         
@@ -284,7 +285,7 @@ def add_comments_to_docx(docx_path, analysis, output_path):
         ET.register_namespace('w', 'http://schemas.openxmlformats.org/wordprocessingml/2006/main')
         ET.register_namespace('r', 'http://schemas.openxmlformats.org/officeDocument/2006/relationships')
         
-        # Create comments.xml
+    # Create comments.xml
         comments = []
         comment_id = 0
         
