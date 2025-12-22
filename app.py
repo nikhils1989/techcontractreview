@@ -12,6 +12,7 @@ import shutil
 from datetime import datetime
 from flask import Flask, render_template, request, jsonify, send_file, session
 from werkzeug.utils import secure_filename
+from werkzeug.exceptions import HTTPException, RequestEntityTooLarge
 import anthropic
 
 app = Flask(__name__)
@@ -260,6 +261,9 @@ CONTRACT TEXT:
         return {"error": str(e)}
     except anthropic.APIError as e:
         return {"error": f"API error: {str(e)}"}
+    except Exception as e:
+        app.logger.exception("Unexpected error during Anthropic analysis")
+        return {"error": f"Unexpected error during analysis: {str(e)}"}
 
 
 def add_comments_to_docx(docx_path, analysis, output_path):
@@ -463,6 +467,24 @@ def download():
 @app.route('/health')
 def health():
     return jsonify({'status': 'healthy'})
+
+
+@app.errorhandler(RequestEntityTooLarge)
+def handle_file_too_large(error):
+    return jsonify({'error': 'File too large. Maximum size is 16MB.'}), 413
+
+
+@app.errorhandler(Exception)
+def handle_unexpected_error(error):
+    if isinstance(error, HTTPException):
+        return error
+    
+    app.logger.exception("Unhandled exception during request")
+    
+    if request.path.startswith('/analyze'):
+        return jsonify({'error': 'An unexpected error occurred while processing your request. Please try again.'}), 500
+    
+    return jsonify({'error': 'Internal server error'}), 500
 
 
 if __name__ == '__main__':
