@@ -29,7 +29,7 @@ def get_anthropic_client():
     api_key = os.environ.get('ANTHROPIC_API_KEY')
     if not api_key:
         raise ValueError("ANTHROPIC_API_KEY environment variable is not set")
-    return anthropic.Anthropic(api_key=api_key)
+    return anthropic.Anthropic(api_key=api_key, timeout=120.0)  # 2 minute timeout
 
 # Tollen's Key Contract Clauses (prioritized by importance)
 TOLLEN_CLAUSES = [
@@ -259,6 +259,8 @@ CONTRACT TEXT:
         }
     except ValueError as e:
         return {"error": str(e)}
+    except anthropic.APITimeoutError as e:
+        return {"error": "Analysis request timed out. The contract may be too large or complex. Please try a shorter document."}
     except anthropic.APIError as e:
         return {"error": f"API error: {str(e)}"}
     except Exception as e:
