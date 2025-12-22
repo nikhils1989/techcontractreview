@@ -254,8 +254,22 @@
                     method: 'POST',
                     body: formData
                 });
+
+                const contentType = response.headers.get('content-type') || '';
+                let data;
+
+                if (contentType.includes('application/json')) {
+                    data = await response.json();
+                } else {
+                    const text = await response.text();
+                    throw new Error(`Unexpected response from server: ${response.status} ${text?.slice(0, 200) || ''}`);
+                }
                 
-                const data = await response.json();
+                if (!response.ok) {
+                    const errorMessage = data?.error || `Request failed with status ${response.status}`;
+                    showError(errorMessage);
+                    return;
+                }
                 
                 if (data.error) {
                     showError(data.error);
