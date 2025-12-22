@@ -232,13 +232,13 @@ Respond in this exact JSON format:
 }}
 
 CONTRACT TEXT:
-{contract_text[:50000]}"""  # Limit to ~50k chars for API
+{contract_text[:20000]}"""  # Limit to ~20k chars for API
 
     try:
         client = get_anthropic_client()
         message = client.messages.create(
             model="claude-sonnet-4-20250514",
-            max_tokens=8000,
+            max_tokens=4000,
             messages=[{"role": "user", "content": prompt}]
         )
         
