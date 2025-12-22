@@ -23,8 +23,12 @@ ALLOWED_EXTENSIONS = {'doc', 'docx'}
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max
 
-# Initialize Anthropic client
-client = anthropic.Anthropic(api_key=os.environ.get('ANTHROPIC_API_KEY'))
+# Initialize Anthropic client lazily to avoid startup errors
+def get_anthropic_client():
+    api_key = os.environ.get('ANTHROPIC_API_KEY')
+    if not api_key:
+        raise ValueError("ANTHROPIC_API_KEY environment variable is not set")
+    return anthropic.Anthropic(api_key=api_key)
 
 # Tollen's Key Contract Clauses (prioritized by importance)
 TOLLEN_CLAUSES = [
@@ -230,6 +234,7 @@ CONTRACT TEXT:
 {contract_text[:50000]}"""  # Limit to ~50k chars for API
 
     try:
+        client = get_anthropic_client()
         message = client.messages.create(
             model="claude-sonnet-4-20250514",
             max_tokens=8000,
@@ -251,6 +256,8 @@ CONTRACT TEXT:
             "error": f"Failed to parse analysis: {str(e)}",
             "raw_response": response_text if 'response_text' in locals() else None
         }
+    except ValueError as e:
+        return {"error": str(e)}
     except anthropic.APIError as e:
         return {"error": f"API error: {str(e)}"}
 
