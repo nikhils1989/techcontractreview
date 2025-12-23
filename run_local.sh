@@ -10,9 +10,8 @@ fi
 # Activate virtual environment
 source venv/bin/activate
 
-# Install/update dependencies
-echo "Installing dependencies..."
-pip install -r requirements.txt -q
+# Run build script
+./build.sh
 
 # Run the Flask application
 echo ""
