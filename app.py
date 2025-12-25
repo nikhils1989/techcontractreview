@@ -154,7 +154,7 @@ def extract_text_manually(docx_path):
 
 
 def analyze_contract_with_ai(contract_text, party_type, comment_level):
-    """Send contract to ChatGPT for analysis based on Tollen's framework"""
+    """Send contract to ChatGPT for analysis based on David Tollen's framework"""
     
     level_descriptions = {
         "friendly": """FRIENDLY review approach:
@@ -167,7 +167,7 @@ def analyze_contract_with_ai(contract_text, party_type, comment_level):
         "moderate": """MODERATE review approach:
 - Flag both major and moderate risks
 - Suggest balanced modifications that protect interests without being aggressive
-- Recommend industry-standard protections
+- Recommend industry-standard protections for technology companies
 - Point out one-sided provisions but suggest reasonable compromises
 - Tone: professional and fair""",
         
