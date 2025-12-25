@@ -1,6 +1,6 @@
 """
 Tech Contract Reviewer - Based on David Tollen's Framework
-A Flask application for AI-powered contract review using Claude API
+A Flask application for AI-powered contract review using ChatGPT API
 """
 
 import os
@@ -13,7 +13,7 @@ from datetime import datetime
 from flask import Flask, render_template, request, jsonify, send_file, session
 from werkzeug.utils import secure_filename
 from werkzeug.exceptions import HTTPException, RequestEntityTooLarge
-import anthropic
+from openai import OpenAI
 
 app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', 'dev-secret-key-change-in-production')
@@ -24,13 +24,13 @@ ALLOWED_EXTENSIONS = {'doc', 'docx'}
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max
 
-# Initialize Anthropic client lazily to avoid startup errors
-def get_anthropic_client():
-    api_key = os.environ.get('ANTHROPIC_API_KEY')
+# Initialize OpenAI client lazily to avoid startup errors
+def get_openai_client():
+    api_key = os.environ.get('OPENAI_API_KEY')
     if not api_key:
-        raise ValueError("ANTHROPIC_API_KEY environment variable is not set")
+        raise ValueError("OPENAI_API_KEY environment variable is not set")
     # Set timeout to 120 seconds to prevent hanging requests
-    return anthropic.Anthropic(api_key=api_key, timeout=120.0)
+    return OpenAI(api_key=api_key, timeout=120.0)
 
 # Tollen's Key Contract Clauses (prioritized by importance)
 TOLLEN_CLAUSES = [
@@ -153,8 +153,8 @@ def extract_text_manually(docx_path):
     return ''.join(text_parts)
 
 
-def analyze_contract_with_claude(contract_text, party_type, comment_level):
-    """Send contract to Claude for analysis based on Tollen's framework"""
+def analyze_contract_with_ai(contract_text, party_type, comment_level):
+    """Send contract to ChatGPT for analysis based on Tollen's framework"""
     
     level_descriptions = {
         "friendly": """FRIENDLY review approach:
@@ -236,14 +236,14 @@ CONTRACT TEXT:
 {contract_text[:20000]}"""  # Limit to ~20k chars for API
 
     try:
-        client = get_anthropic_client()
-        message = client.messages.create(
-            model="claude-sonnet-4-20250514",
+        client = get_openai_client()
+        response = client.chat.completions.create(
+            model="gpt-4-turbo-preview",
             max_tokens=4000,
             messages=[{"role": "user", "content": prompt}]
         )
-        
-        response_text = message.content[0].text
+
+        response_text = response.choices[0].message.content
         
         # Extract JSON from response (handle markdown code blocks)
         if "```json" in response_text:
@@ -260,15 +260,18 @@ CONTRACT TEXT:
         }
     except ValueError as e:
         return {"error": str(e)}
-    except anthropic.APITimeoutError as e:
-        return {"error": "The analysis request timed out. This can happen with very large contracts. Please try again or contact support if the issue persists."}
-    except anthropic.APIConnectionError as e:
-        return {"error": f"Network error connecting to analysis service: {str(e)}"}
-    except anthropic.APIError as e:
-        return {"error": f"API error: {str(e)}"}
     except Exception as e:
-        app.logger.exception("Unexpected error during Anthropic analysis")
-        return {"error": f"Unexpected error during analysis: {str(e)}"}
+        # Handle OpenAI API errors
+        error_message = str(e)
+        if "timeout" in error_message.lower():
+            return {"error": "The analysis request timed out. This can happen with very large contracts. Please try again or contact support if the issue persists."}
+        elif "connection" in error_message.lower() or "network" in error_message.lower():
+            return {"error": f"Network error connecting to analysis service: {str(e)}"}
+        elif "api" in error_message.lower() or "openai" in error_message.lower():
+            return {"error": f"API error: {str(e)}"}
+        else:
+            app.logger.exception("Unexpected error during AI analysis")
+            return {"error": f"Unexpected error during analysis: {str(e)}"}
 
 
 def add_comments_to_docx(docx_path, analysis, output_path):
@@ -426,8 +429,8 @@ def analyze():
         if not contract_text.strip():
             return jsonify({'error': 'Could not extract text from document'}), 400
         
-        # Analyze with Claude
-        analysis = analyze_contract_with_claude(contract_text, party_type, comment_level)
+        # Analyze with AI
+        analysis = analyze_contract_with_ai(contract_text, party_type, comment_level)
         
         if 'error' in analysis:
             return jsonify(analysis), 500

@@ -19,11 +19,11 @@ if [ -f .env ]; then
     echo -e "${GREEN}✓${NC} Found .env file"
 fi
 
-# Check if ANTHROPIC_API_KEY is set, if not prompt for it
-if [ -z "$ANTHROPIC_API_KEY" ]; then
-    echo -e "${YELLOW}ANTHROPIC_API_KEY not found in .env file${NC}"
-    read -p "Please enter your Anthropic API key: " ANTHROPIC_API_KEY
-    export ANTHROPIC_API_KEY
+# Check if OPENAI_API_KEY is set, if not prompt for it
+if [ -z "$OPENAI_API_KEY" ]; then
+    echo -e "${YELLOW}OPENAI_API_KEY not found in .env file${NC}"
+    read -p "Please enter your OpenAI API key: " OPENAI_API_KEY
+    export OPENAI_API_KEY
     echo ""
 fi
 
