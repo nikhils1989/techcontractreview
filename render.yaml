@@ -8,7 +8,7 @@ services:
     buildCommand: |
       apt-get update && apt-get install -y libreoffice pandoc
       pip install -r requirements.txt
-    startCommand: gunicorn app:app --bind 0.0.0.0:$PORT --timeout 180
+    startCommand: gunicorn app:app --bind 0.0.0.0:$PORT --timeout 300 --workers 2 --threads 2 --worker-class sync --graceful-timeout 30 --keep-alive 5
     envVars:
       - key: ANTHROPIC_API_KEY
         sync: false  # Set this manually in Render dashboard
