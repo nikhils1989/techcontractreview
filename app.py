@@ -274,78 +274,248 @@ CONTRACT TEXT:
             return {"error": f"Unexpected error during analysis: {str(e)}"}
 
 
-def add_comments_to_docx(docx_path, analysis, output_path):
-    """Add review comments to the document"""
+def extract_paragraphs_from_docx(doc_xml_path):
+    """Extract paragraphs with their text content from document.xml"""
     import xml.etree.ElementTree as ET
-    
+
+    try:
+        tree = ET.parse(doc_xml_path)
+        root = tree.getroot()
+
+        # Define namespaces
+        ns = {
+            'w': 'http://schemas.openxmlformats.org/wordprocessingml/2006/main'
+        }
+
+        paragraphs = []
+        para_elements = root.findall('.//w:p', ns)
+
+        for idx, para in enumerate(para_elements):
+            # Extract all text from the paragraph
+            text_elements = para.findall('.//w:t', ns)
+            para_text = ''.join([t.text or '' for t in text_elements])
+
+            if para_text.strip():  # Only include non-empty paragraphs
+                paragraphs.append({
+                    'index': idx,
+                    'text': para_text.strip(),
+                    'element': para
+                })
+
+        return paragraphs
+    except Exception as e:
+        print(f"Error extracting paragraphs: {e}")
+        return []
+
+
+def match_issues_to_paragraphs(paragraphs, analysis):
+    """Use ChatGPT to match issues to specific paragraphs"""
+    if not paragraphs:
+        return {}
+
+    try:
+        client = get_openai_client()
+
+        # Prepare paragraph text for matching
+        para_text = "\n\n".join([f"[Paragraph {p['index']}]: {p['text'][:200]}..." if len(p['text']) > 200 else f"[Paragraph {p['index']}]: {p['text']}" for p in paragraphs[:50]])  # Limit to first 50 paragraphs to avoid token limits
+
+        # Prepare issues list
+        issues_text = ""
+        all_items = []
+
+        if 'issues' in analysis:
+            for i, issue in enumerate(analysis['issues']):
+                issues_text += f"\n\nIssue {i}: {issue.get('clause_category', 'General')} - {issue.get('concern', 'N/A')}"
+                all_items.append(('issue', i, issue))
+
+        if 'missing_clauses' in analysis:
+            for i, missing in enumerate(analysis['missing_clauses']):
+                issues_text += f"\n\nMissing {i}: {missing.get('clause_category', 'General')} - {missing.get('importance', 'N/A')}"
+                all_items.append(('missing', i, missing))
+
+        # Ask ChatGPT to match
+        prompt = f"""You are analyzing a contract document. Below are the paragraphs from the document and issues identified during review.
+
+PARAGRAPHS:
+{para_text}
+
+ISSUES TO MATCH:
+{issues_text}
+
+For each issue or missing clause, identify which paragraph number it most closely relates to. If an issue relates to a missing clause (something that should be in the contract but isn't), return -1 for that issue.
+
+Respond with ONLY a JSON object mapping each issue/missing to a paragraph index. Format:
+{{
+  "Issue 0": paragraph_index,
+  "Issue 1": paragraph_index,
+  "Missing 0": -1,
+  ...
+}}
+
+Use -1 for missing clauses or when no good match is found."""
+
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.3,
+            max_tokens=1000
+        )
+
+        result_text = response.choices[0].message.content.strip()
+
+        # Parse the JSON response
+        # Remove markdown code blocks if present
+        if result_text.startswith('```'):
+            result_text = result_text.split('```')[1]
+            if result_text.startswith('json'):
+                result_text = result_text[4:]
+            result_text = result_text.strip()
+
+        matches = json.loads(result_text)
+
+        # Convert to our internal format
+        issue_matches = {}
+        for item_type, item_idx, item_data in all_items:
+            key = f"{item_type.capitalize()} {item_idx}"
+            if key in matches:
+                para_idx = matches[key]
+                if para_idx >= 0 and para_idx < len(paragraphs):
+                    issue_matches[(item_type, item_idx)] = para_idx
+
+        return issue_matches
+
+    except Exception as e:
+        print(f"Error matching issues to paragraphs: {e}")
+        return {}
+
+
+def add_comments_to_docx(docx_path, analysis, output_path):
+    """Add review comments to the document with proper anchoring"""
+    import xml.etree.ElementTree as ET
+
     # Create working directory
     work_dir = tempfile.mkdtemp()
-    
+
     try:
         # Extract docx
         with zipfile.ZipFile(docx_path, 'r') as z:
             z.extractall(work_dir)
-        
+
         # Read document.xml
         doc_xml_path = os.path.join(work_dir, 'word', 'document.xml')
-        ET.register_namespace('', 'http://schemas.openxmlformats.org/wordprocessingml/2006/main')
-        ET.register_namespace('w', 'http://schemas.openxmlformats.org/wordprocessingml/2006/main')
-        ET.register_namespace('r', 'http://schemas.openxmlformats.org/officeDocument/2006/relationships')
-        
-        # Create comments.xml
+
+        # Register namespaces
+        ns = {
+            'w': 'http://schemas.openxmlformats.org/wordprocessingml/2006/main',
+            'r': 'http://schemas.openxmlformats.org/officeDocument/2006/relationships'
+        }
+        ET.register_namespace('w', ns['w'])
+        ET.register_namespace('r', ns['r'])
+
+        # Parse document
+        tree = ET.parse(doc_xml_path)
+        root = tree.getroot()
+
+        # Extract paragraphs
+        paragraphs = extract_paragraphs_from_docx(doc_xml_path)
+
+        # Match issues to paragraphs
+        issue_matches = match_issues_to_paragraphs(paragraphs, analysis)
+
+        # Create comments data
         comments = []
         comment_id = 0
-        
+        comment_insertions = []  # (paragraph_index, comment_id, comment_data)
+
         if 'issues' in analysis:
-            for issue in analysis['issues']:
-                comments.append({
+            for i, issue in enumerate(analysis['issues']):
+                comment_data = {
                     'id': comment_id,
                     'author': 'Contract Reviewer',
                     'date': datetime.now().isoformat(),
                     'text': f"[{issue.get('risk_level', 'REVIEW')}] {issue.get('clause_category', 'General')}\n\n"
                            f"CONCERN: {issue.get('concern', 'N/A')}\n\n"
                            f"RECOMMENDATION: {issue.get('recommendation', 'N/A')}"
-                })
+                }
+                comments.append(comment_data)
+
+                # Find paragraph to attach comment to
+                para_idx = issue_matches.get(('issue', i), 0)  # Default to first paragraph
+                comment_insertions.append((para_idx, comment_id, comment_data))
                 comment_id += 1
-        
+
         if 'missing_clauses' in analysis:
-            for missing in analysis['missing_clauses']:
-                comments.append({
+            for i, missing in enumerate(analysis['missing_clauses']):
+                comment_data = {
                     'id': comment_id,
                     'author': 'Contract Reviewer',
                     'date': datetime.now().isoformat(),
                     'text': f"[MISSING CLAUSE] {missing.get('clause_category', 'General')}\n\n"
                            f"IMPORTANCE: {missing.get('importance', 'N/A')}\n\n"
                            f"SUGGESTED: {missing.get('suggested_language', 'N/A')}"
-                })
+                }
+                comments.append(comment_data)
+
+                # Missing clauses go at the end
+                para_idx = len(paragraphs) - 1 if paragraphs else 0
+                comment_insertions.append((para_idx, comment_id, comment_data))
                 comment_id += 1
-        
+
+        # Insert comment markers into document.xml
+        para_elements = root.findall('.//w:p', ns)
+
+        for para_idx, comm_id, comm_data in comment_insertions:
+            if para_idx < len(para_elements):
+                para = para_elements[para_idx]
+
+                # Create comment range start
+                range_start = ET.Element(f"{{{ns['w']}}}commentRangeStart")
+                range_start.set(f"{{{ns['w']}}}id", str(comm_id))
+
+                # Create comment range end
+                range_end = ET.Element(f"{{{ns['w']}}}commentRangeEnd")
+                range_end.set(f"{{{ns['w']}}}id", str(comm_id))
+
+                # Create comment reference run
+                comment_run = ET.Element(f"{{{ns['w']}}}r")
+                comment_ref = ET.SubElement(comment_run, f"{{{ns['w']}}}commentReference")
+                comment_ref.set(f"{{{ns['w']}}}id", str(comm_id))
+
+                # Insert markers: start at beginning, end and reference at end
+                para.insert(0, range_start)
+                para.append(range_end)
+                para.append(comment_run)
+
+        # Save modified document.xml
+        tree.write(doc_xml_path, encoding='utf-8', xml_declaration=True)
+
         # Build comments.xml
         comments_xml = '''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <w:comments xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"
             xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
 '''
         for c in comments:
+            escaped_text = c['text'].replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
             comments_xml += f'''  <w:comment w:id="{c['id']}" w:author="{c['author']}" w:date="{c['date']}">
     <w:p>
       <w:r>
-        <w:t>{c['text'].replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')}</w:t>
+        <w:t xml:space="preserve">{escaped_text}</w:t>
       </w:r>
     </w:p>
   </w:comment>
 '''
         comments_xml += '</w:comments>'
-        
+
         # Write comments.xml
         comments_path = os.path.join(work_dir, 'word', 'comments.xml')
         with open(comments_path, 'w', encoding='utf-8') as f:
             f.write(comments_xml)
-        
+
         # Update [Content_Types].xml to include comments
         content_types_path = os.path.join(work_dir, '[Content_Types].xml')
         with open(content_types_path, 'r', encoding='utf-8') as f:
             content_types = f.read()
-        
+
         if 'comments.xml' not in content_types:
             content_types = content_types.replace(
                 '</Types>',
@@ -353,35 +523,42 @@ def add_comments_to_docx(docx_path, analysis, output_path):
             )
             with open(content_types_path, 'w', encoding='utf-8') as f:
                 f.write(content_types)
-        
+
         # Update document.xml.rels
         rels_path = os.path.join(work_dir, 'word', '_rels', 'document.xml.rels')
         with open(rels_path, 'r', encoding='utf-8') as f:
             rels = f.read()
-        
+
         if 'comments.xml' not in rels:
+            # Find the highest existing rId
+            import re
+            rids = re.findall(r'Id="rId(\d+)"', rels)
+            max_rid = max([int(r) for r in rids]) if rids else 0
+            new_rid = f"rId{max_rid + 1}"
+
             rels = rels.replace(
                 '</Relationships>',
-                '  <Relationship Id="rIdComments" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/comments" Target="comments.xml"/>\n</Relationships>'
+                f'  <Relationship Id="{new_rid}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/comments" Target="comments.xml"/>\n</Relationships>'
             )
             with open(rels_path, 'w', encoding='utf-8') as f:
                 f.write(rels)
-        
+
         # Repack docx
         with zipfile.ZipFile(output_path, 'w', zipfile.ZIP_DEFLATED) as z:
-            for root, dirs, files in os.walk(work_dir):
+            for root_dir, dirs, files in os.walk(work_dir):
                 for file in files:
-                    file_path = os.path.join(root, file)
+                    file_path = os.path.join(root_dir, file)
                     arcname = os.path.relpath(file_path, work_dir)
                     z.write(file_path, arcname)
-        
+
         return True
-    
+
     except Exception as e:
+        print(f"Error adding comments: {e}")
         # If annotation fails, just copy the original
         shutil.copy(docx_path, output_path)
         return False
-    
+
     finally:
         shutil.rmtree(work_dir, ignore_errors=True)
 
