@@ -243,13 +243,30 @@ CONTRACT TEXT:
             messages=[{"role": "user", "content": prompt}]
         )
 
+        # Validate response structure before accessing
+        if not response.choices or len(response.choices) == 0:
+            return {"error": "Invalid API response: no choices returned"}
+        if not response.choices[0].message or not response.choices[0].message.content:
+            return {"error": "Invalid API response: no content in message"}
+
         response_text = response.choices[0].message.content
         
         # Extract JSON from response (handle markdown code blocks)
         if "```json" in response_text:
-            response_text = response_text.split("```json")[1].split("```")[0]
+            parts = response_text.split("```json")
+            if len(parts) > 1:
+                # Get content after ```json and find closing ```
+                after_json = parts[1]
+                end_pos = after_json.find("```")
+                response_text = after_json[:end_pos] if end_pos != -1 else after_json
         elif "```" in response_text:
-            response_text = response_text.split("```")[1].split("```")[0]
+            parts = response_text.split("```")
+            if len(parts) >= 3:
+                # Content is between first and second ```
+                response_text = parts[1]
+            elif len(parts) == 2:
+                # Only one closing backtick, take content after
+                response_text = parts[1]
         
         return json.loads(response_text.strip())
     
@@ -361,15 +378,23 @@ Use -1 for missing clauses or when no good match is found."""
             max_tokens=1000
         )
 
+        # Validate response structure before accessing
+        if not response.choices or len(response.choices) == 0:
+            raise ValueError("Invalid API response: no choices returned")
+        if not response.choices[0].message or not response.choices[0].message.content:
+            raise ValueError("Invalid API response: no content in message")
+
         result_text = response.choices[0].message.content.strip()
 
         # Parse the JSON response
         # Remove markdown code blocks if present
         if result_text.startswith('```'):
-            result_text = result_text.split('```')[1]
-            if result_text.startswith('json'):
-                result_text = result_text[4:]
-            result_text = result_text.strip()
+            parts = result_text.split('```')
+            if len(parts) > 1:
+                result_text = parts[1]
+                if result_text.startswith('json'):
+                    result_text = result_text[4:]
+                result_text = result_text.strip()
 
         matches = json.loads(result_text)
 
