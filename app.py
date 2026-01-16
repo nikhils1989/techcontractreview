@@ -29,8 +29,9 @@ def get_openai_client():
     api_key = os.environ.get('OPENAI_API_KEY')
     if not api_key:
         raise ValueError("OPENAI_API_KEY environment variable is not set")
-    # Set timeout to 120 seconds to prevent hanging requests
-    return OpenAI(api_key=api_key, timeout=120.0)
+    # Set timeout to 90 seconds to prevent hanging requests
+    # Reduced from 120 to ensure we fail before gunicorn worker timeout
+    return OpenAI(api_key=api_key, timeout=90.0)
 
 # Tollen's Key Contract Clauses (prioritized by importance)
 TOLLEN_CLAUSES = [
@@ -233,12 +234,12 @@ Respond in this exact JSON format:
 }}
 
 CONTRACT TEXT:
-{contract_text[:20000]}"""  # Limit to ~20k chars for API
+{contract_text[:15000]}"""  # Limit to ~15k chars for faster API response
 
     try:
         client = get_openai_client()
         response = client.chat.completions.create(
-            model="gpt-4-turbo-preview",
+            model="gpt-4o",  # Faster and more efficient than gpt-4-turbo-preview
             max_tokens=4000,
             messages=[{"role": "user", "content": prompt}]
         )
@@ -271,21 +272,32 @@ CONTRACT TEXT:
         return json.loads(response_text.strip())
     
     except json.JSONDecodeError as e:
+        app.logger.error(f"JSON decode error: {e}")
         return {
             "error": f"Failed to parse analysis: {str(e)}",
             "raw_response": response_text if 'response_text' in locals() else None
         }
     except ValueError as e:
+        app.logger.error(f"Value error: {e}")
         return {"error": str(e)}
     except Exception as e:
-        # Handle OpenAI API errors
+        # Handle OpenAI API errors with detailed logging
         error_message = str(e)
-        if "timeout" in error_message.lower():
-            return {"error": "The analysis request timed out. This can happen with very large contracts. Please try again or contact support if the issue persists."}
+        error_type = type(e).__name__
+        app.logger.error(f"Error during AI analysis - Type: {error_type}, Message: {error_message}")
+
+        if "timeout" in error_message.lower() or "timed out" in error_message.lower():
+            app.logger.warning("API request timed out - consider reducing contract size or upgrading infrastructure")
+            return {"error": "The AI analysis request timed out. This usually happens with very large contracts. Please try uploading a smaller document or contact support."}
         elif "connection" in error_message.lower() or "network" in error_message.lower():
-            return {"error": f"Network error connecting to analysis service: {str(e)}"}
+            app.logger.warning(f"Network error: {error_message}")
+            return {"error": f"Network error connecting to AI service. Please check your connection and try again. Error: {str(e)}"}
+        elif "rate_limit" in error_message.lower():
+            app.logger.warning("Rate limit exceeded")
+            return {"error": "API rate limit exceeded. Please wait a moment and try again."}
         elif "api" in error_message.lower() or "openai" in error_message.lower():
-            return {"error": f"API error: {str(e)}"}
+            app.logger.warning(f"OpenAI API error: {error_message}")
+            return {"error": f"AI service error: {str(e)}"}
         else:
             app.logger.exception("Unexpected error during AI analysis")
             return {"error": f"Unexpected error during analysis: {str(e)}"}
